@@ -45,7 +45,7 @@ func (m *Meter) Tick(now time.Time) Stat {
 		stat.Speed = float64(done-first.done) / elapsed
 	}
 	if stat.Speed > 0 {
-		stat.Left = time.Duration(float64(m.total-done)/stat.Speed) * time.Second
+		stat.Left = time.Duration(float64(m.total-done) / stat.Speed * float64(time.Second))
 	}
 	return stat
 }

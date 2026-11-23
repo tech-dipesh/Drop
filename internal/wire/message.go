@@ -6,7 +6,10 @@ import (
 	"io"
 )
 
-const Version = 1
+const (
+	Version = 1
+	Port    = 47470
+)
 
 type Message interface{ message() }
 
