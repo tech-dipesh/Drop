@@ -2,14 +2,21 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net/http"
+	"os"
 )
 
-func main() {
-	fs := http.FileServer(http.Dir("./upload"))
-	http.Handle("/files/", http.StripPrefix("/files/", fs))
+const usage = `usage:
+  drop            wait for files from a nearby device
+  drop <files>    send files to a nearby device`
 
-	fmt.Println("Sharing files on http://localhost:8080/files/")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "drop:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	fmt.Println(usage)
+	return nil
 }
