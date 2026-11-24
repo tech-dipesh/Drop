@@ -17,7 +17,7 @@ import (
 
 func noTrack(wire.Offer, *transfer.Meter) func() { return func() {} }
 
-var sender = send.Sender{From: "test", Offered: func(wire.Offer) {}, Track: noTrack}
+var sender = send.Sender{Offered: func(wire.Offer) {}, Track: noTrack}
 
 func start(t *testing.T, dir string, accept bool) (string, chan []string) {
 	t.Helper()
@@ -54,8 +54,12 @@ func TestTransferAccepted(t *testing.T) {
 		}
 		paths = append(paths, path)
 	}
+	offer, err := send.Build("test", paths)
+	if err != nil {
+		t.Fatal(err)
+	}
 	addr, results := start(t, dst, true)
-	if err := sender.Send(context.Background(), addr, paths); err != nil {
+	if err := sender.Send(context.Background(), addr, offer, paths); err != nil {
 		t.Fatal(err)
 	}
 	saved := <-results
@@ -79,8 +83,12 @@ func TestTransferDeclined(t *testing.T) {
 	if err := os.WriteFile(path, []byte("hi"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	offer, err := send.Build("test", []string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
 	addr, results := start(t, dst, false)
-	err := sender.Send(context.Background(), addr, []string{path})
+	err = sender.Send(context.Background(), addr, offer, []string{path})
 	if err == nil || !strings.Contains(err.Error(), "declined") {
 		t.Fatalf("got %v, want declined", err)
 	}

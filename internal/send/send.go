@@ -12,16 +12,11 @@ import (
 )
 
 type Sender struct {
-	From    string
 	Offered func(wire.Offer)
 	Track   func(wire.Offer, *transfer.Meter) func()
 }
 
-func (s Sender) Send(ctx context.Context, addr string, paths []string) error {
-	offer, err := build(s.From, paths)
-	if err != nil {
-		return err
-	}
+func (s Sender) Send(ctx context.Context, addr string, offer wire.Offer, paths []string) error {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -70,7 +65,7 @@ func (s Sender) stream(conn net.Conn, paths []string, offer wire.Offer) error {
 	return nil
 }
 
-func build(from string, paths []string) (wire.Offer, error) {
+func Build(from string, paths []string) (wire.Offer, error) {
 	offer := wire.Offer{Version: wire.Version, From: from}
 	for _, path := range paths {
 		info, err := os.Stat(path)

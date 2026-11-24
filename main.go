@@ -3,13 +3,18 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
 
+	"github.com/tech-dipesh/drop/internal/discover"
+	"github.com/tech-dipesh/drop/internal/peer"
 	"github.com/tech-dipesh/drop/internal/receive"
 	"github.com/tech-dipesh/drop/internal/send"
 	"github.com/tech-dipesh/drop/internal/ui"
@@ -17,8 +22,9 @@ import (
 )
 
 const usage = `usage:
-  drop            wait for files from a nearby device
-  drop <files>    send files to a nearby device`
+  drop                 wait for files, visible to nearby devices
+  drop <files>         pick a nearby device and send files to it
+  drop -name <name>    rename this device, then wait for files`
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -30,20 +36,33 @@ func main() {
 }
 
 func run(ctx context.Context, args []string) error {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Println(usage)
-		return nil
+	flags := flag.NewFlagSet("drop", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	flags.Usage = func() { fmt.Println(usage) }
+	rename := flags.String("name", "", "")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return err
 	}
-	port := strconv.Itoa(wire.Port)
-	if len(args) == 0 {
-		return listen(ctx, port)
+	me, err := peer.Load()
+	if err != nil {
+		return err
 	}
-	host, _ := os.Hostname()
-	s := send.Sender{From: cmp.Or(host, "unknown device"), Offered: ui.Offered, Track: ui.Track}
-	return s.Send(ctx, net.JoinHostPort("localhost", port), args)
+	if *rename != "" {
+		me.Name = *rename
+		if err := peer.Save(me); err != nil {
+			return err
+		}
+	}
+	if flags.NArg() == 0 {
+		return listen(ctx, me)
+	}
+	return share(ctx, me, flags.Args())
 }
 
-func listen(ctx context.Context, port string) error {
+func listen(ctx context.Context, me peer.Peer) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -52,16 +71,42 @@ func listen(ctx context.Context, port string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	ln, err := net.Listen("tcp", ":"+port)
+	ln, err := net.Listen("tcp", ":"+strconv.Itoa(wire.Port))
 	if err != nil {
 		return err
 	}
-	ui.Waiting(dir)
+	ui.Waiting(me.Name, dir)
 	r := receive.Receiver{
 		Dir:   dir,
 		Ask:   func(o wire.Offer) bool { return ui.Accept(ctx, o) },
 		Track: ui.Track,
 		Done:  ui.Done,
 	}
-	return r.Serve(ctx, ln)
+	errs := make(chan error, 2)
+	go func() { errs <- discover.Answer(ctx, me) }()
+	go func() { errs <- r.Serve(ctx, ln) }()
+	return <-errs
+}
+
+func share(ctx context.Context, me peer.Peer, paths []string) error {
+	offer, err := send.Build(me.Name, paths)
+	if err != nil {
+		return err
+	}
+	scan, stop := context.WithCancel(ctx)
+	defer stop()
+	found, err := discover.Scan(scan)
+	if err != nil {
+		return err
+	}
+	to, err := ui.Pick(ctx, found)
+	if err != nil {
+		return err
+	}
+	stop()
+	s := send.Sender{
+		Offered: func(o wire.Offer) { ui.Offered(o, to.Name) },
+		Track:   ui.Track,
+	}
+	return s.Send(ctx, to.Addr, offer, paths)
 }
