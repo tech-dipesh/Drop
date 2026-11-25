@@ -22,14 +22,23 @@ type Offer struct {
 	Version int    `json:"version"`
 	From    string `json:"from"`
 	Files   []File `json:"files"`
+	Test    bool   `json:"test,omitempty"`
 }
 
 type Answer struct {
 	Accept bool `json:"accept"`
 }
 
-type Trailer struct {
-	Hashes []string `json:"hashes"`
+type Commit struct {
+	Hash []byte `json:"hash"`
+}
+
+type Nonce struct {
+	Value []byte `json:"value"`
+}
+
+type Reveal struct {
+	Nonce []byte `json:"nonce"`
 }
 
 type Result struct {
@@ -37,10 +46,12 @@ type Result struct {
 	Error string `json:"error,omitempty"`
 }
 
-func (Offer) message()   {}
-func (Answer) message()  {}
-func (Trailer) message() {}
-func (Result) message()  {}
+func (Offer) message()  {}
+func (Answer) message() {}
+func (Commit) message() {}
+func (Nonce) message()  {}
+func (Reveal) message() {}
+func (Result) message() {}
 
 func (o Offer) Total() int64 {
 	var total int64
