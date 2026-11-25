@@ -11,11 +11,16 @@ import (
 	"github.com/tech-dipesh/drop/internal/peer"
 )
 
+const hint = `nothing yet, still looking
+  run drop on the other device, both on the same wifi or hotspot
+  vpn on? allow lan access in its settings
+  windows? allow drop in the firewall and set the network to private`
+
 func Pick(ctx context.Context, found <-chan peer.Peer) (peer.Peer, error) {
 	fmt.Println("searching nearby devices, type a number and press enter")
 	var peers []peer.Peer
 	answer := readLine()
-	hint := time.After(3 * time.Second)
+	quiet := time.After(3 * time.Second)
 	for {
 		select {
 		case p := <-found:
@@ -28,9 +33,9 @@ func Pick(ctx context.Context, found <-chan peer.Peer) (peer.Peer, error) {
 			}
 			fmt.Println("type a number from the list")
 			answer = readLine()
-		case <-hint:
+		case <-quiet:
 			if len(peers) == 0 {
-				fmt.Println("nothing yet, run drop on the other device and keep both on the same network")
+				fmt.Println(hint)
 			}
 		case <-ctx.Done():
 			return peer.Peer{}, ctx.Err()

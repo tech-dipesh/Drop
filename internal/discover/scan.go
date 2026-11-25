@@ -33,11 +33,20 @@ func Scan(ctx context.Context) (<-chan peer.Peer, error) {
 
 func probe(ctx context.Context, conn *net.UDPConn, nets []*net.IPNet) {
 	msg, _ := json.Marshal(beacon{Version: wire.Version, Kind: "probe"})
+	var everyone []net.IP
+	for _, n := range nets {
+		everyone = append(everyone, hosts(n)...)
+	}
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
-	for {
+	for round := 0; ; round++ {
 		for _, n := range nets {
 			conn.WriteToUDP(msg, &net.UDPAddr{IP: broadcast(n), Port: wire.Port})
+		}
+		if round%3 == 1 {
+			for _, ip := range everyone {
+				conn.WriteToUDP(msg, &net.UDPAddr{IP: ip, Port: wire.Port})
+			}
 		}
 		select {
 		case <-ctx.Done():

@@ -1,6 +1,9 @@
 package discover
 
-import "net"
+import (
+	"encoding/binary"
+	"net"
+)
 
 func networks() ([]*net.IPNet, error) {
 	ifaces, err := net.Interfaces()
@@ -34,4 +37,18 @@ func broadcast(n *net.IPNet) net.IP {
 		ip[i] = n.IP[i] | ^n.Mask[i]
 	}
 	return ip
+}
+
+func hosts(n *net.IPNet) []net.IP {
+	mask := n.Mask
+	if ones, _ := mask.Size(); ones < 24 {
+		mask = net.CIDRMask(24, 32)
+	}
+	start := binary.BigEndian.Uint32(n.IP.Mask(mask))
+	size := ^binary.BigEndian.Uint32(mask)
+	var ips []net.IP
+	for i := uint32(1); i < size; i++ {
+		ips = append(ips, net.IP(binary.BigEndian.AppendUint32(nil, start+i)))
+	}
+	return ips
 }
