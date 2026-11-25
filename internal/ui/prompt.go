@@ -15,8 +15,16 @@ func Waiting(name, dir string) {
 	fmt.Printf("visible as %s, saving to %s (ctrl+c to stop)\n", clean(name), dir)
 }
 
+func Paired(code string) {
+	fmt.Printf("\npairing code %s, check it matches the other screen\n", code)
+}
+
 func Accept(ctx context.Context, o wire.Offer) bool {
-	fmt.Printf("\n%s wants to send %s (%s). accept? [y/n] ", clean(o.From), label(o), size(o.Total()))
+	what := fmt.Sprintf("send %s (%s)", label(o), size(o.Total()))
+	if o.Test {
+		what = fmt.Sprintf("run a speed test (%s, nothing is saved)", size(o.Total()))
+	}
+	fmt.Printf("%s wants to %s. accept? [y/n] ", clean(o.From), what)
 	select {
 	case a := <-readLine():
 		return a == "y" || a == "yes"

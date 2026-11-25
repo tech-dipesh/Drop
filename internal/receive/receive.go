@@ -2,36 +2,48 @@ package receive
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 
+	"github.com/tech-dipesh/drop/internal/pair"
 	"github.com/tech-dipesh/drop/internal/transfer"
 	"github.com/tech-dipesh/drop/internal/wire"
 )
 
 type Receiver struct {
-	Dir   string
-	Ask   func(wire.Offer) bool
-	Track func(wire.Offer, *transfer.Meter) func()
-	Done  func(saved []string, err error)
+	Dir    string
+	Paired func(code string)
+	Ask    func(wire.Offer) bool
+	Track  func(wire.Offer, *transfer.Meter) func()
+	Done   func(saved []string, err error)
 }
 
 func (r Receiver) Serve(ctx context.Context, ln net.Listener) error {
+	conf, err := pair.ServerConfig()
+	if err != nil {
+		return err
+	}
 	defer context.AfterFunc(ctx, func() { ln.Close() })()
 	for {
-		conn, err := ln.Accept()
+		raw, err := ln.Accept()
 		if err != nil {
 			return err
 		}
-		saved, err := r.handle(ctx, conn)
+		saved, err := r.handle(ctx, tls.Server(raw, conf))
 		r.Done(saved, err)
 	}
 }
 
-func (r Receiver) handle(ctx context.Context, conn net.Conn) ([]string, error) {
+func (r Receiver) handle(ctx context.Context, conn *tls.Conn) ([]string, error) {
 	defer conn.Close()
 	defer context.AfterFunc(ctx, func() { conn.Close() })()
+	code, err := pair.AsReceiver(conn)
+	if err != nil {
+		return nil, fmt.Errorf("pairing: %w", err)
+	}
 	var offer wire.Offer
 	if err := wire.Receive(conn, &offer); err != nil {
 		return nil, fmt.Errorf("read offer: %w", err)
@@ -39,12 +51,19 @@ func (r Receiver) handle(ctx context.Context, conn net.Conn) ([]string, error) {
 	if err := check(offer); err != nil {
 		return nil, err
 	}
+	r.Paired(code)
 	accept := r.Ask(offer)
 	if err := wire.Send(conn, wire.Answer{Accept: accept}); err != nil || !accept {
 		return nil, err
 	}
 	m := transfer.NewMeter(offer.Total())
 	defer r.Track(offer, m)()
+	if offer.Test {
+		if err := transfer.Copy(io.Discard, conn, offer.Total(), m.Add); err != nil {
+			return nil, err
+		}
+		return nil, wire.Send(conn, wire.Result{OK: true})
+	}
 	var saved []string
 	for _, f := range offer.Files {
 		path, err := save(r.Dir, f, conn, m.Add)

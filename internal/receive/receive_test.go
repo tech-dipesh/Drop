@@ -17,7 +17,7 @@ import (
 
 func noTrack(wire.Offer, *transfer.Meter) func() { return func() {} }
 
-var sender = send.Sender{Offered: func(wire.Offer) {}, Track: noTrack}
+var sender = send.Sender{Paired: func(string) {}, Offered: func(wire.Offer) {}, Track: noTrack}
 
 func start(t *testing.T, dir string, accept bool) (string, chan []string) {
 	t.Helper()
@@ -29,9 +29,10 @@ func start(t *testing.T, dir string, accept bool) (string, chan []string) {
 	t.Cleanup(cancel)
 	results := make(chan []string, 1)
 	r := receive.Receiver{
-		Dir:   dir,
-		Ask:   func(wire.Offer) bool { return accept },
-		Track: noTrack,
+		Dir:    dir,
+		Paired: func(string) {},
+		Ask:    func(wire.Offer) bool { return accept },
+		Track:  noTrack,
 		Done: func(saved []string, err error) {
 			if err != nil {
 				t.Error(err)
