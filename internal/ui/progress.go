@@ -50,7 +50,7 @@ func line(name string, s transfer.Stat) string {
 
 func summary(name string, done int64, elapsed time.Duration) string {
 	avg := float64(done) / elapsed.Seconds()
-	return fmt.Sprintf("%-20.20s %s in %s (%s/s)", name, size(done), elapsed.Round(100*time.Millisecond), size(int64(avg)))
+	return fmt.Sprintf("%-20.20s %s in %.2fs (%s/s)", name, size(done), elapsed.Seconds(), size(int64(avg)))
 }
 
 func draw(text string) {
